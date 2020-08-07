@@ -6,21 +6,22 @@ import numpy as np
 import math
 import time
 
+
 #
 #
 # Cygnassの重心と1本のレイの交点
 #
 #
 
-def main(stl, d, fov, ray_center):
+def main(stl, d, fov, ray_center, res):
     data_real = real_scale(stl, d)
-    show(data_real, fov, ray_center)
+    show(data_real, fov, ray_center, res)
 
 
 def intersection_min(data, ray):  # dataはmesh.Mesh型、dはレイベクトル。
     ans_min = []
     ray = ray / np.linalg.norm(ray)
-    t_min = 100000000
+    t_min = 10000000
     for vector in data.vectors:
         e1 = vector[1] - vector[0]
         e2 = vector[2] - vector[0]
@@ -28,38 +29,42 @@ def intersection_min(data, ray):  # dataはmesh.Mesh型、dはレイベクトル
         u = np.cross(ray, e2)
         v = np.cross(r, e1)
         if np.inner(u, e1) > 10 ** -3:
-            t, beta, ganma = [np.inner(v, e2), np.inner(u, r), np.inner(v, ray)] / (np.inner(u, e1))
-            if beta >= 0 and ganma >= 0 and (beta + ganma) <= 1:
-                if t_min > t:
-                    t_min = t
-    if not t_min == 100000000:
+            beta = np.inner(u, r) / np.inner(u, e1)
+            if beta >= 0:
+                ganma = np.inner(v, ray) / np.inner(u, e1)
+                if ganma >= 0 and (beta + ganma) <= 1:
+                    t = np.inner(v, e2) / np.inner(u, e1)
+                    if t_min > t:
+                        t_min = t
+    if not 10000000 == t_min:
         ans_min.append(t_min * ray)
     return ans_min
 
 
-def show(data, fov, ray_center):  # dataはmesh.Meshオブジェクト,dはレイベクトル。
+def show(data, fov, ray_center, res):  # dataはmesh.Meshオブジェクト,dはレイベクトル。
     fig = plt.figure()
     axes = fig.add_subplot(projection='3d')
     X1 = data.x.flatten()
     Y1 = data.y.flatten()
     Z1 = data.z.flatten()
     axes.plot(X1, Y1, Z1)
-    dot = rays_func(data, fov, ray_center)
+    dot = rays_func(data, fov, ray_center, res)
+    t0 = time.time()
     for ray in dot:
         d1 = np.linspace(0, 1.5 * ray[0], 2)
         d2 = np.linspace(0, 1.5 * ray[1], 2)
         d3 = np.linspace(0, 1.5 * ray[2], 2)
         axes.plot(d1, d2, d3, color='r', linewidth=0.5)
+
         inter = intersection_min(data, ray)
-        print(inter)
         for i in inter:
             axes.scatter(i[0], i[1], i[2], color='k')
         axes.scatter(data.get_mass_properties()[1][0],
                      data.get_mass_properties()[1][1],
                      data.get_mass_properties()[1][2],
                      marker='*', color='y')
-
     fov_line = [[], [], []]
+    print("calculate intersection:{}".format(time.time() - t0) + "[sec]")
     for coor in fov_area(data, fov, ray_center):
         for j, k in enumerate(coor):
             fov_line[j].append(k)
@@ -95,7 +100,7 @@ def fov_area(data, fov, ray_center):
     a = 1 + (ray_center_y / ray_center_x) ** 2
     b = - ((cog_size ** 2 - ray_center_z ** 2) * ray_center_y) / (ray_center_x ** 2)
     c = ((cog_size ** 2 - ray_center_z ** 2) ** 2 / ray_center_x ** 2) - (
-                cog_size / math.cos(math.radians(fov / 2))) ** 2 + ray_center_z ** 2
+            cog_size / math.cos(math.radians(fov / 2))) ** 2 + ray_center_z ** 2
     t = answer2eq(a, b, c)
     cog_mid_z0 = [[(cog_size ** 2 - ray_center_z ** 2 - ray_center_y * t[0]) / ray_center_x, t[0], ray_center_z],
                   [(cog_size ** 2 - ray_center_z ** 2 - ray_center_y * t[1]) / ray_center_x, t[1], ray_center_z]]
@@ -112,7 +117,7 @@ def fov_area(data, fov, ray_center):
     return cog_vertices
 
 
-def rays_func(data, fov, ray_center):
+def rays_func(data, fov, ray_center, res):
     v4 = fov_area(data, fov, ray_center)
     side_vectors = []
     side_vectors_unit = []
@@ -120,11 +125,11 @@ def rays_func(data, fov, ray_center):
     for i in range(2):
         side_vectors.append(np.array(v4[i + 1]) - np.array(v4[i]))
     for i in range(2):
-        side_vectors_unit.append(side_vectors[i] / 5)
+        side_vectors_unit.append(side_vectors[i] / res)
     x = side_vectors_unit[0]
     y = side_vectors_unit[1]
-    for i in range(6):
-        for j in range(6):
+    for i in range(res + 1):
+        for j in range(res + 1):
             dot.append((x * i + y * j) + np.array(v4[0]))
     return dot
 
@@ -156,6 +161,6 @@ def answer2eq(a, b, c):
 
 if __name__ == '__main__':
     start = time.time()
-    main('cygnss.stl', [1000, 1000, 1000], 5, [1000, 1000, 1000])
+    main('cygnss.stl', [1000, 1000, 1000], 20, [1000, 1000, 1000], 10)
     elapsed_time = time.time() - start
     print("elapsed_time:{0}".format(elapsed_time) + "[sec]")
